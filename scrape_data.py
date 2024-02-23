@@ -33,7 +33,7 @@ def clean_data(final_table):
 # Loop over all years in the dataset.
 current = False
 START_YEAR = 2012
-END_YEAR = 2022
+END_YEAR = 2023
 
 for year in range(START_YEAR, END_YEAR + 1):
     print(year)
@@ -62,3 +62,66 @@ for year in range(START_YEAR, END_YEAR + 1):
         draft_spots = [info.split(" / ") for info in draft_info]
         round_ = [int(spot[1][0]) for spot in draft_spots]
         pick = [int(''.join(filter(str.isdigit, spot[2]))) for spot in draft_spots]
+
+    #Get college data
+    college_elements = webpage.select('td.left + .left')
+    college = [element.get_text() for element in college_elements]
+
+    # Define names of columns
+    cols = ["Row", "Name", "Position", "Round", "Pick", "College", "Conference", "Games", "Seasons"]
+    combine = ["Height", "Weight", "40 Yard", "Bench", "Broad Jump", "Shuttle", "3 Cone", "Vertical"]
+    defense = ["Solo Tackles", "Ast Tackles", "Total Tackles", "Tackles for Loss", "Sacks", "Int", "Int Return Yards", "Int TD", "Pass Deflection", "Fumble Recovery", "Fumble Return Yards", "Fumble TD", "Forced Fumbles"]
+    offense = ["Pass Att", "Pass Completions", "Pass Yds", "Pass TD", "Pass Int", "Passer Rating", "Rush Att", "Rush Yds", "Rush TD", "Rec", "Rec Yds", "Rec TD"]
+    special = ["PRs", "PR Yds", "PR TD", "KRs", "KR Yds", "KR TD", "XPA", "XP%", "FGA", "FG%", "Punts", "Punt Avg"]
+    cols += combine + offense + defense + special
+
+    # List names of positions
+    def_pos = ["CB", "DB", "DE", "DT", "FS", "ILB", "LB", "NT", "OLB", "S", "SS", "EDGE"]
+    off_pos = ["C", "FB", "G", "QB", "RB", "T", "TE", "WR"]
+    other_pos = ["K", "P", "LS"]
+
+    # Set up dataframe that holds the data.
+    info_df = pd.DataFrame({
+        'Row': range(1, num_players + 1),
+        'names': names,
+        'pos': pos,
+        'round': round,
+        'pick': pick,
+        'college': college
+    })
+
+    other_df = pd.DataFrame(0, index=range(num_players), columns=range(49))
+    other_df.iloc[:, 0] = range(1, num_players + 1)
+    other_df.rename(columns={0: 'Row'}, inplace=True)
+    info_df.rename(columns={0: 'Row'}, inplace=True)
+    
+    df = pd.merge(info_df, other_df, on='Row')
+    cols = df.columns.tolist()
+    df.columns = cols
+    cols.remove('Row')
+    df = df.drop(columns=['Row'])
+
+    # Get list of stat pages for all players
+    stat_urls = [link.get('href') for link in webpage.select('.left + .right a')]
+    tables = webpage.find_all('table')
+    if tables:
+        stats = pd.read_html(str(tables[0]))[0]
+    stats = stats[stats['Player'] != 'Player']
+    stats.reset_index(drop=True, inplace=True)
+
+    bad_rows = []
+    for row in range(len(df)):
+        # Skip header rows
+        if df.loc[row, "Name"] == "Player":
+            bad_rows.append(row)
+            continue
+        
+        stat_url = html_nodes(stat_urls[row], "a")[0].get("href")
+
+        # Read vital data
+        pos = df.loc[row, "Position"]
+        height = stats.loc[row, "Ht"]
+        weight = stats.loc[row, "Wt"]
+        height = list(map(int, height.split("-")))
+        df.loc[row, "Height"] = 12 * height[0] + height[1]
+        df.loc[row, "Weight"] = int(weight[:3])
