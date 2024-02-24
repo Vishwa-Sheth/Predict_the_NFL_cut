@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+import math
 
 def get_stat(html_data, stat):
     """
@@ -112,16 +113,29 @@ for year in range(START_YEAR, END_YEAR + 1):
     bad_rows = []
     for row in range(len(df)):
         # Skip header rows
-        if df.loc[row, "Name"] == "Player":
+        if df.loc[row, "names"] == "Player":
             bad_rows.append(row)
             continue
         
-        stat_url = html_nodes(stat_urls[row], "a")[0].get("href")
+        stat_url = stat_urls[0]
+        #html_nodes(stat_urls[row], "a")[0].get("href")
 
         # Read vital data
-        pos = df.loc[row, "Position"]
+        pos = df.loc[row, "pos"]
         height = stats.loc[row, "Ht"]
         weight = stats.loc[row, "Wt"]
-        height = list(map(int, height.split("-")))
-        df.loc[row, "Height"] = 12 * height[0] + height[1]
+        
+        # print(height, type(height))
+        #print(weight)
+        
+        if type(height)==float and math.isnan(height):
+            height='0-0'
+        if type(weight)==float and math.isnan(weight):
+            weight='000'
+            
+        hgt=height.split('-')
+        
+        #height = list(map(int, height.split("-")))
+        df.loc[row, "Height"] = 12 * int(hgt[0]) + int(hgt[1])
         df.loc[row, "Weight"] = int(weight[:3])
+    print(df)
