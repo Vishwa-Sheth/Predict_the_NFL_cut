@@ -2,6 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import math
+import warnings
+warnings.filterwarnings("ignore")
 
 def get_stat(html_data, stat):
     """
@@ -110,7 +112,7 @@ for year in range(START_YEAR, END_YEAR + 1):
     df.columns = cols
     cols.remove('Row')
     df = df.drop(columns=['Row'])
-
+    # print(df.head())
     # Get list of stat pages for all players
     stat_urls = [link.get('href') for link in webpage.select('.left + .right a')]
     tables = webpage.find_all('table')
@@ -172,7 +174,8 @@ for year in range(START_YEAR, END_YEAR + 1):
             continue
         if len(stat_url)==0:
             bad_rows.append(row)
-         
+
+        # special case of broken links
         if (stat_url == "https://www.sports-reference.com/cfb/players/walter-thurmond-1.html"):
             stat_url = "https://www.sports-reference.com/cfb/players/walter-thurmond-iii-1.html"
 
@@ -205,7 +208,7 @@ for year in range(START_YEAR, END_YEAR + 1):
         def_table = None
         games = {}
         RB = True
-        
+        # print(pos)
         if (pos == "QB"):
             pass_table =clean_data(get_stat(stat_page, "passing"))
         if (pos in off_pos):
@@ -215,6 +218,8 @@ for year in range(START_YEAR, END_YEAR + 1):
                 RB=False
         elif(pos in def_pos):
           def_table=clean_data(get_stat(stat_page,"defense"))
+        #   print(get_stat(stat_page,"defense").columns)
+        #   print(def_table)
           games=def_table.iloc[:,[5]]
           '''
           /****** Alert there is some issue with header function as i am not able to fetch the column names in  the dataframe returned from the function
@@ -222,7 +227,7 @@ for year in range(START_YEAR, END_YEAR + 1):
           '''    
         else:
             kick_table=clean_data(get_stat(stat_page,"kicking"))
-            if len(kick_table)==0:
+            if kick_table is None:
                 kick_table=clean_data(get_stat(stat_page,"punting"))
             games=kick_table.iloc[:,[5]]
         ret_table=clean_data(get_stat(stat_page,"punt_ret"))
@@ -230,10 +235,83 @@ for year in range(START_YEAR, END_YEAR + 1):
         if ret_table is None:
             ret_table=clean_data(get_stat(stat_page,"kick_ret"))
         
-        print(df)
+        # print(games)
 
 
         #/********* Niketan Ends here********/
+
+        #/********* Aarsh Starts here********/
+        games = [g for g in games if pd.notna(g)]
+        games = list(map(float, games))
+        
+        # Calculate sum of games and number of seasons
+        df.loc[row, "Games"] = sum(games)
+        df.loc[row, "Seasons"] = len(games)
+
+        if ((pass_table is not None) and (len(pass_table) > 0)):
+            df.loc[row, "Pass Att"] = pass_table.iloc[-1]["Att"]
+            df.loc[row, "Pass Completions"] = pass_table.iloc[-1]["Cmp"]
+            df.loc[row, "Pass Yds"] = pass_table.iloc[-1]["Yds"]
+            df.loc[row, "Pass TD"] = pass_table.iloc[-1]["TD"]
+            df.loc[row, "Pass Int"] = pass_table.iloc[-1]["Int"]
+            df.loc[row, "Passer Rating"] = pass_table.iloc[-1]["Rate"]
+
+        if ((rush_table is not None) and (len(rush_table) > 0)):
+            if RB:  # Running back
+                df.loc[row, "Rush Att"] = rush_table.iloc[-1][7]
+                df.loc[row, "Rush Yds"] = rush_table.iloc[-1][8]
+                df.loc[row, "Rush TD"] = rush_table.iloc[-1][10]
+                df.loc[row, "Rec"] = rush_table.iloc[-1][11]
+                df.loc[row, "Rec Yds"] = rush_table.iloc[-1][12]
+                df.loc[row, "Rec TD"] = rush_table.iloc[-1][14]
+            else:
+                df.loc[row, "Rush Att"] = rush_table.iloc[-1][11]
+                df.loc[row, "Rush Yds"] = rush_table.iloc[-1][12]
+                df.loc[row, "Rush TD"] = rush_table.iloc[-1][14]
+                df.loc[row, "Rec"] = rush_table.iloc[-1][7]
+                df.loc[row, "Rec Yds"] = rush_table.iloc[-1][8]
+                df.loc[row, "Rec TD"] = rush_table.iloc[-1][10]
+
+        # if ((def_table is not None) and (len(def_table) > 0)):
+            df.loc[row, "Solo Tackles"] = def_table.iloc[-1][18]
+            df.loc[row, "Ast Tackles"] = def_table.iloc[-1][19]
+            df.loc[row, "Total Tackles"] = def_table.iloc[-1][20]
+            df.loc[row, "Tackles for Loss"] = def_table.iloc[-1][21]
+            df.loc[row, "Sacks"] = def_table.iloc[-1][22]
+            df.loc[row, "Int"] = def_table.iloc[-1][23]
+            df.loc[row, "Int Return Yards"] = def_table.iloc[-1][24]
+            df.loc[row, "Int TD"] = def_table.iloc[-1][25]
+            # df.loc[row, "Pass Deflection"] = def_table.iloc[-1]["PD"]
+            # df.loc[row, "Fumble Recovery"] = def_table.iloc[-1]["FR"]
+            # df.loc[row, "Fumble Return Yards"] = def_table.iloc[-1][18]
+            # df.loc[row, "Fumble TD"] = def_table.iloc[-1][19]
+            # df.loc[row, "Forced Fumbles"] = def_table.iloc[-1]["FF"]
+
+        if ((ret_table is not None) and (len(ret_table) > 0)):
+            df.loc[row, "KRs"] = ret_table.iloc[-1][7]
+            df.loc[row, "KR Yds"] = ret_table.iloc[-1][8]
+            df.loc[row, "KR TD"] = ret_table.iloc[-1][10]
+            df.loc[row, "PRs"] = ret_table.iloc[-1][11]
+            df.loc[row, "PR Yds"] = ret_table.iloc[-1][12]
+            df.loc[row, "PR TD"] = ret_table.iloc[-1][14]
+
+        if ((kick_table is not None) and (len(kick_table) > 0)):
+            if pos == "K":
+                df.loc[row, "XPA"] = kick_table.iloc[-1][8]
+                df.loc[row, "XP%"] = kick_table.iloc[-1][9]
+                df.loc[row, "FGA"] = kick_table.iloc[-1][11]
+                df.loc[row, "FG%"] = kick_table.iloc[-1][12]
+                df.loc[row, "Punts"] = kick_table.iloc[-1][14]
+                df.loc[row, "Punt Avg"] = kick_table.iloc[-1][16]
+            elif pos == "P":
+                df.loc[row, "XPA"] = kick_table.iloc[-1][11]
+                df.loc[row, "XP%"] = kick_table.iloc[-1][12]
+                df.loc[row, "FGA"] = kick_table.iloc[-1][14]
+                df.loc[row, "FG%"] = kick_table.iloc[-1][15]
+                df.loc[row, "Punts"] = kick_table.iloc[-1][7]
+                df.loc[row, "Punt Avg"] = kick_table.iloc[-1][9]
+
+        # df.to_csv('combine_data.csv',index=False)
         break
     break
    
